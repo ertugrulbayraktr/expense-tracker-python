@@ -12,7 +12,7 @@ class Category:
     """Category class for organizing expenses into hierarchical categories."""
     
     def __init__(self, name, parent_id=None, category_id=None, color="#3498db", icon=None, 
-                 budget=0.0, user_id=None, created_at=None):
+                 budget=0.0, user_id=None, created_at=None, is_income=False):
         """
         Initialize a new Category instance.
         
@@ -25,6 +25,7 @@ class Category:
             budget (float, optional): Monthly budget allocated for this category.
             user_id (str, optional): User ID if this is a user-specific category.
             created_at (str, optional): Creation timestamp. If not provided, current time will be used.
+            is_income (bool, optional): Whether this category is for income transactions. Defaults to False.
         """
         self.name = name
         self.category_id = category_id if category_id else str(uuid.uuid4())
@@ -34,6 +35,7 @@ class Category:
         self.budget = float(budget)
         self.user_id = user_id
         self.created_at = created_at if created_at else datetime.now().isoformat()
+        self.is_income = is_income
     
     def to_dict(self):
         """
@@ -50,7 +52,8 @@ class Category:
             "icon": self.icon,
             "budget": self.budget,
             "user_id": self.user_id,
-            "created_at": self.created_at
+            "created_at": self.created_at,
+            "is_income": self.is_income
         }
     
     @classmethod
@@ -72,7 +75,8 @@ class Category:
             icon=data.get("icon"),
             budget=data.get("budget", 0.0),
             user_id=data.get("user_id"),
-            created_at=data.get("created_at")
+            created_at=data.get("created_at"),
+            is_income=data.get("is_income", False)
         )
     
     def save(self, data_dir="data"):
@@ -211,7 +215,7 @@ class Category:
             {"name": "Entertainment", "color": "#e67e22", "budget": 0, "icon": "film"},
             {"name": "Education", "color": "#34495e", "budget": 0, "icon": "graduation-cap"},
             {"name": "Savings", "color": "#27ae60", "budget": 0, "icon": "piggy-bank"},
-            {"name": "Income", "color": "#16a085", "budget": 0, "icon": "money-bill"},
+            {"name": "Income", "color": "#16a085", "budget": 0, "icon": "money-bill", "is_income": True},
         ]
         
         # Sub-categories - will be created after main categories
@@ -273,10 +277,12 @@ class Category:
             {"name": "Investments", "parent": "Savings", "icon": "chart-line"},
             
             # Income subcategories
-            {"name": "Salary", "parent": "Income", "icon": "briefcase"},
-            {"name": "Bonus", "parent": "Income", "icon": "gift"},
-            {"name": "Interest", "parent": "Income", "icon": "percentage"},
-            {"name": "Dividends", "parent": "Income", "icon": "chart-pie"},
+            {"name": "Salary", "parent": "Income", "icon": "briefcase", "is_income": True},
+            {"name": "Bonus", "parent": "Income", "icon": "gift", "is_income": True},
+            {"name": "Interest", "parent": "Income", "icon": "percentage", "is_income": True},
+            {"name": "Dividends", "parent": "Income", "icon": "chart-pie", "is_income": True},
+            {"name": "Freelance", "parent": "Income", "icon": "laptop-code", "is_income": True},
+            {"name": "Rental", "parent": "Income", "icon": "home", "is_income": True},
         ]
         
         created_categories = []
@@ -289,7 +295,8 @@ class Category:
                 color=cat_data["color"],
                 icon=cat_data["icon"],
                 budget=cat_data["budget"],
-                user_id=user_id
+                user_id=user_id,
+                is_income=cat_data.get("is_income", False)
             )
             category.save(data_dir)
             created_categories.append(category)
@@ -303,7 +310,8 @@ class Category:
                     name=subcat_data["name"],
                     parent_id=parent_id,
                     icon=subcat_data["icon"],
-                    user_id=user_id
+                    user_id=user_id,
+                    is_income=subcat_data.get("is_income", False)
                 )
                 category.save(data_dir)
                 created_categories.append(category)
@@ -344,3 +352,30 @@ class Category:
         # Reverse the path to get parent > child format
         path.reverse()
         return " > ".join(path)
+
+    def delete(self, data_dir="data"):
+        """
+        Delete the category data file.
+        
+        Args:
+            data_dir (str): Directory path for stored category data.
+            
+        Returns:
+            bool: True if deletion was successful, False otherwise.
+        """
+        categories_dir = os.path.join(data_dir, "categories")
+        
+        # Determine the file path based on whether it's a user-specific or global category
+        if self.user_id:
+            user_categories_dir = os.path.join(categories_dir, self.user_id)
+            category_file = os.path.join(user_categories_dir, f"{self.category_id}.json")
+        else:
+            category_file = os.path.join(categories_dir, f"{self.category_id}.json")
+        
+        try:
+            if os.path.exists(category_file):
+                os.remove(category_file)
+            return True
+        except Exception as e:
+            print(f"Error deleting category data: {e}")
+            return False

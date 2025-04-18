@@ -288,23 +288,279 @@ class CategoriesFrame(BaseFrame):
     
     def _show_add_category_dialog(self):
         """Show dialog for adding a new category."""
-        # Stub implementation - will be expanded later
-        self.show_message("Not Implemented", "This feature will be implemented soon", "info")
+        # Create a dialog window
+        dialog = tk.Toplevel(self)
+        dialog.title("Add New Category")
+        dialog.geometry("400x350")
+        dialog.resizable(False, False)
+        dialog.transient(self)  # Make dialog modal
+        dialog.grab_set()
+        
+        # Create form
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Category name
+        ttk.Label(frame, text="Category Name:").grid(row=0, column=0, sticky="w", pady=5)
+        name_var = tk.StringVar()
+        name_entry = ttk.Entry(frame, textvariable=name_var, width=30)
+        name_entry.grid(row=0, column=1, sticky="ew", pady=5)
+        name_entry.focus_set()
+        
+        # Budget
+        ttk.Label(frame, text="Budget:").grid(row=1, column=0, sticky="w", pady=5)
+        budget_var = tk.StringVar(value="0.0")
+        budget_entry = ttk.Entry(frame, textvariable=budget_var, width=30)
+        budget_entry.grid(row=1, column=1, sticky="ew", pady=5)
+        
+        # Color
+        ttk.Label(frame, text="Color:").grid(row=2, column=0, sticky="w", pady=5)
+        
+        # Generate a random color
+        default_color = "#{:02x}{:02x}{:02x}".format(random.randint(0, 255), 
+                                                    random.randint(0, 255), 
+                                                    random.randint(0, 255))
+        color_var = tk.StringVar(value=default_color)
+        
+        color_preview = tk.Frame(frame, width=30, height=30, bg=default_color)
+        color_preview.grid(row=2, column=1, sticky="w", pady=5)
+        
+        color_btn = ttk.Button(frame, text="Select Color", 
+                             command=lambda: self._choose_color(color_var, color_preview))
+        color_btn.grid(row=2, column=1, sticky="e", pady=5)
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        
+        save_btn = ttk.Button(btn_frame, text="Save", 
+                            command=lambda: self._save_category(dialog, name_var.get(), 
+                                                             budget_var.get(), color_var.get()))
+        save_btn.pack(side="left", padx=5)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Cancel", command=dialog.destroy)
+        cancel_btn.pack(side="left", padx=5)
     
     def _show_add_subcategory_dialog(self, parent_category):
         """Show dialog for adding a subcategory."""
-        # Stub implementation - will be expanded later
-        self.show_message("Not Implemented", "This feature will be implemented soon", "info")
+        # Create a dialog window
+        dialog = tk.Toplevel(self)
+        dialog.title(f"Add Subcategory to {parent_category.name}")
+        dialog.geometry("400x350")
+        dialog.resizable(False, False)
+        dialog.transient(self)  # Make dialog modal
+        dialog.grab_set()
+        
+        # Create form
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Category name
+        ttk.Label(frame, text="Subcategory Name:").grid(row=0, column=0, sticky="w", pady=5)
+        name_var = tk.StringVar()
+        name_entry = ttk.Entry(frame, textvariable=name_var, width=30)
+        name_entry.grid(row=0, column=1, sticky="ew", pady=5)
+        name_entry.focus_set()
+        
+        # Budget
+        ttk.Label(frame, text="Budget:").grid(row=1, column=0, sticky="w", pady=5)
+        budget_var = tk.StringVar(value="0.0")
+        budget_entry = ttk.Entry(frame, textvariable=budget_var, width=30)
+        budget_entry.grid(row=1, column=1, sticky="ew", pady=5)
+        
+        # Color
+        ttk.Label(frame, text="Color:").grid(row=2, column=0, sticky="w", pady=5)
+        
+        # Generate a random color similar to parent
+        parent_color = parent_category.color.lstrip('#')
+        parent_rgb = tuple(int(parent_color[i:i+2], 16) for i in (0, 2, 4))
+        
+        # Slightly vary the color
+        new_rgb = tuple(max(0, min(255, c + random.randint(-40, 40))) for c in parent_rgb)
+        default_color = "#{:02x}{:02x}{:02x}".format(*new_rgb)
+        
+        color_var = tk.StringVar(value=default_color)
+        
+        color_preview = tk.Frame(frame, width=30, height=30, bg=default_color)
+        color_preview.grid(row=2, column=1, sticky="w", pady=5)
+        
+        color_btn = ttk.Button(frame, text="Select Color", 
+                             command=lambda: self._choose_color(color_var, color_preview))
+        color_btn.grid(row=2, column=1, sticky="e", pady=5)
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        
+        save_btn = ttk.Button(btn_frame, text="Save", 
+                            command=lambda: self._save_subcategory(dialog, name_var.get(), 
+                                                                parent_category.category_id,
+                                                                budget_var.get(), color_var.get()))
+        save_btn.pack(side="left", padx=5)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Cancel", command=dialog.destroy)
+        cancel_btn.pack(side="left", padx=5)
     
     def _show_edit_category_dialog(self, category):
         """Show dialog for editing a category."""
-        # Stub implementation - will be expanded later
-        self.show_message("Not Implemented", "This feature will be implemented soon", "info")
+        # Create a dialog window
+        dialog = tk.Toplevel(self)
+        dialog.title(f"Edit Category: {category.name}")
+        dialog.geometry("400x350")
+        dialog.resizable(False, False)
+        dialog.transient(self)  # Make dialog modal
+        dialog.grab_set()
+        
+        # Create form
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Category name
+        ttk.Label(frame, text="Category Name:").grid(row=0, column=0, sticky="w", pady=5)
+        name_var = tk.StringVar(value=category.name)
+        name_entry = ttk.Entry(frame, textvariable=name_var, width=30)
+        name_entry.grid(row=0, column=1, sticky="ew", pady=5)
+        name_entry.focus_set()
+        
+        # Budget
+        ttk.Label(frame, text="Budget:").grid(row=1, column=0, sticky="w", pady=5)
+        budget_var = tk.StringVar(value=str(category.budget))
+        budget_entry = ttk.Entry(frame, textvariable=budget_var, width=30)
+        budget_entry.grid(row=1, column=1, sticky="ew", pady=5)
+        
+        # Color
+        ttk.Label(frame, text="Color:").grid(row=2, column=0, sticky="w", pady=5)
+        color_var = tk.StringVar(value=category.color)
+        
+        color_preview = tk.Frame(frame, width=30, height=30, bg=category.color)
+        color_preview.grid(row=2, column=1, sticky="w", pady=5)
+        
+        color_btn = ttk.Button(frame, text="Select Color", 
+                             command=lambda: self._choose_color(color_var, color_preview))
+        color_btn.grid(row=2, column=1, sticky="e", pady=5)
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        
+        save_btn = ttk.Button(btn_frame, text="Save", 
+                            command=lambda: self._update_category(dialog, category, 
+                                                               name_var.get(), 
+                                                               budget_var.get(), 
+                                                               color_var.get()))
+        save_btn.pack(side="left", padx=5)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Cancel", command=dialog.destroy)
+        cancel_btn.pack(side="left", padx=5)
+    
+    def _choose_color(self, color_var, preview_widget):
+        """Show color picker dialog and update the color variable and preview."""
+        try:
+            from tkinter import colorchooser
+            color = colorchooser.askcolor(color_var.get())[1]
+            if color:
+                color_var.set(color)
+                preview_widget.config(bg=color)
+        except Exception as e:
+            self.show_message("Error", f"Could not open color picker: {str(e)}", "error")
+    
+    def _save_category(self, dialog, name, budget, color):
+        """Save a new category."""
+        if not name:
+            self.show_message("Error", "Category name cannot be empty", "error")
+            return
+        
+        try:
+            budget_value = float(budget)
+        except ValueError:
+            self.show_message("Error", "Budget must be a number", "error")
+            return
+        
+        # Create and save the category
+        user_id = self.controller.current_user.user_id if self.controller.current_user else None
+        category = Category(name=name, budget=budget_value, color=color, user_id=user_id)
+        
+        if category.save(self.controller.data_dir):
+            dialog.destroy()
+            self.refresh_data()
+            self.show_message("Success", "Category added successfully", "info")
+        else:
+            self.show_message("Error", "Failed to save category", "error")
+    
+    def _save_subcategory(self, dialog, name, parent_id, budget, color):
+        """Save a new subcategory."""
+        if not name:
+            self.show_message("Error", "Subcategory name cannot be empty", "error")
+            return
+        
+        try:
+            budget_value = float(budget)
+        except ValueError:
+            self.show_message("Error", "Budget must be a number", "error")
+            return
+        
+        # Create and save the subcategory
+        user_id = self.controller.current_user.user_id if self.controller.current_user else None
+        category = Category(name=name, parent_id=parent_id, budget=budget_value, 
+                          color=color, user_id=user_id)
+        
+        if category.save(self.controller.data_dir):
+            dialog.destroy()
+            self.refresh_data()
+            self.show_message("Success", "Subcategory added successfully", "info")
+        else:
+            self.show_message("Error", "Failed to save subcategory", "error")
+    
+    def _update_category(self, dialog, category, name, budget, color):
+        """Update an existing category."""
+        if not name:
+            self.show_message("Error", "Category name cannot be empty", "error")
+            return
+        
+        try:
+            budget_value = float(budget)
+        except ValueError:
+            self.show_message("Error", "Budget must be a number", "error")
+            return
+        
+        # Update category attributes
+        category.name = name
+        category.budget = budget_value
+        category.color = color
+        
+        if category.save(self.controller.data_dir):
+            dialog.destroy()
+            self.refresh_data()
+            self.show_message("Success", "Category updated successfully", "info")
+        else:
+            self.show_message("Error", "Failed to update category", "error")
     
     def _confirm_delete_category(self, category):
         """Confirm and delete a category."""
-        # Stub implementation - will be expanded later
-        self.show_message("Not Implemented", "This feature will be implemented soon", "info")
+        # Check if the category has subcategories
+        subcategories = [cat for cat in self.categories if cat.parent_id == category.category_id]
+        
+        if subcategories:
+            message = f"This category has {len(subcategories)} subcategories that will also be deleted. Are you sure you want to delete '{category.name}' and all its subcategories?"
+        else:
+            message = f"Are you sure you want to delete the category '{category.name}'?"
+        
+        if self.ask_yes_no("Confirm Delete", message):
+            try:
+                # Delete the category
+                success = category.delete(self.controller.data_dir)
+                
+                # Delete subcategories if they exist
+                for subcat in subcategories:
+                    subcat.delete(self.controller.data_dir)
+                
+                if success:
+                    self.refresh_data()
+                    self.show_message("Success", "Category deleted successfully", "info")
+                else:
+                    self.show_message("Error", "Failed to delete the category", "error")
+            except Exception as e:
+                self.show_message("Error", f"Error deleting category: {str(e)}", "error")
     
     def _apply_filters(self):
         """Apply filters to the category list."""

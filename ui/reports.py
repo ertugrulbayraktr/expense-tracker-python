@@ -110,47 +110,10 @@ class ReportsFrame(BaseFrame):
                                command=self._show_monthly_summary)
         monthly_btn.pack(pady=5, fill="x")
         
-        # Category distribution report
-        category_btn = ttk.Button(sidebar, text="Category Distribution", width=20,
-                                command=self._show_category_distribution)
-        category_btn.pack(pady=5, fill="x")
-        
-        # Trend analysis report
-        trend_btn = ttk.Button(sidebar, text="Trend Analysis", width=20,
-                             command=self._show_trend_analysis)
-        trend_btn.pack(pady=5, fill="x")
-        
-        # Period comparison report
-        comparison_btn = ttk.Button(sidebar, text="Period Comparison", width=20,
-                                  command=self._show_period_comparison)
-        comparison_btn.pack(pady=5, fill="x")
-        
-        # Spending patterns report
-        patterns_btn = ttk.Button(sidebar, text="Spending Patterns", width=20,
-                                command=self._show_spending_patterns)
-        patterns_btn.pack(pady=5, fill="x")
-        
-        # Budget progress report
-        budget_btn = ttk.Button(sidebar, text="Budget Progress", width=20,
-                              command=self._show_budget_progress)
-        budget_btn.pack(pady=5, fill="x")
-        
-        # Add spacer
-        ttk.Separator(sidebar, orient="horizontal").pack(pady=10, fill="x")
-        
-        # Export options
-        export_label = ttk.Label(sidebar, text="Export Options", font=("Helvetica", 12, "bold"))
-        export_label.pack(anchor="w", pady=(10, 10))
-        
-        # Export as PDF button
-        pdf_btn = ttk.Button(sidebar, text="Export as PDF", width=20,
-                           command=self._export_as_pdf)
-        pdf_btn.pack(pady=5, fill="x")
-        
-        # Export as PNG button
-        png_btn = ttk.Button(sidebar, text="Export as PNG", width=20,
-                           command=self._export_as_png)
-        png_btn.pack(pady=5, fill="x")
+        # Add refresh button
+        refresh_btn = ttk.Button(sidebar, text="Refresh Data", width=20,
+                              command=self.refresh_data)
+        refresh_btn.pack(pady=(20, 5), fill="x")
     
     def _show_monthly_summary(self):
         """Show the monthly summary report."""
@@ -337,18 +300,8 @@ class ReportsFrame(BaseFrame):
             self.categories_dict = {cat.category_id: cat for cat in categories}
             
             # Reload current report
-            if self.current_report == "monthly_summary":
-                self._show_monthly_summary()
-            elif self.current_report == "category_distribution":
-                self._show_category_distribution()
-            elif self.current_report == "trend_analysis":
-                self._show_trend_analysis()
-            elif self.current_report == "period_comparison":
-                self._show_period_comparison()
-            elif self.current_report == "spending_patterns":
-                self._show_spending_patterns()
-            elif self.current_report == "budget_progress":
-                self._show_budget_progress()
+            self._show_monthly_summary()
+            self.current_report = "monthly_summary"
         else:
             self.expenses = []
             self.categories_dict = {}

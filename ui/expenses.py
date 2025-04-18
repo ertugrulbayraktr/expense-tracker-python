@@ -6,10 +6,14 @@ import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 import calendar
+import os
+import csv
+from tkinter import filedialog
 from tkcalendar import DateEntry
 from .base import BaseFrame, ScrollableFrame, Tooltip
 from models.expense import Expense
 from models.category import Category
+from utils.analysis import export_expenses_to_csv
 
 class ExpensesFrame(BaseFrame):
     """Main frame for managing expenses."""
@@ -171,6 +175,19 @@ class ExpensesFrame(BaseFrame):
         income_radio = ttk.Radiobutton(type_frame, text="Income Only", value="income", 
                                      variable=self.type_var, command=self._apply_filters)
         income_radio.pack(anchor="w", padx=5, pady=2)
+        
+        # Add separator
+        ttk.Separator(sidebar, orient="horizontal").pack(fill="x", pady=10)
+        
+        # Export section
+        export_label = ttk.Label(sidebar, text="Export Data", font=("Helvetica", 12, "bold"))
+        export_label.pack(anchor="w", pady=(10, 5))
+        
+        # Export button - Tamamen yeniden oluşturuyoruz
+        export_frame = ttk.Frame(sidebar)
+        export_frame.pack(fill="x", pady=2)
+        export_btn = ttk.Button(export_frame, text="Export to CSV", command=lambda: self._export_to_csv())
+        export_btn.pack(fill="x")
         
         # Add expense button
         add_btn = ttk.Button(sidebar, text="Add New Expense", style="Primary.TButton",
@@ -334,7 +351,7 @@ class ExpensesFrame(BaseFrame):
         if date_filter == "current_month":
             # Current month
             current_month = now.strftime("%Y-%m")
-            filtered = [e for e in filtered if e.date.startswith(current_month)]
+            filtered = [e for e in filtered if e.date and e.date.startswith(current_month)]
         
         elif date_filter == "last_month":
             # Last month
@@ -343,18 +360,43 @@ class ExpensesFrame(BaseFrame):
             else:
                 last_month = f"{now.year}-{now.month-1:02d}"
             
-            filtered = [e for e in filtered if e.date.startswith(last_month)]
+            filtered = [e for e in filtered if e.date and e.date.startswith(last_month)]
         
         elif date_filter == "custom":
             # Custom date range
             start = self.start_date.get_date().strftime("%Y-%m-%d")
             end = self.end_date.get_date().strftime("%Y-%m-%d")
             
-            filtered = [e for e in filtered if start <= e.date <= end]
+            # Make sure date is not None and is in proper format before comparing
+            filtered = [e for e in filtered if e.date and start <= e.date <= end]
         
         # Apply category filter
         if category_filter != "all":
-            filtered = [e for e in filtered if e.category_id == category_filter]
+            # Check if category is a main category (might have subcategories)
+            is_main = category_filter in self.categories_dict
+            
+            if is_main:
+                selected_category = self.categories_dict[category_filter]
+                
+                # If it's a main category, include all expenses with this category or its subcategories
+                if selected_category.parent_id is None:  # It's definitely a main category
+                    # Get all subcategory IDs for this main category
+                    subcategory_ids = [
+                        cat_id for cat_id, cat in self.categories_dict.items()
+                        if cat.parent_id == category_filter
+                    ]
+                    
+                    # Include the main category and all its subcategories
+                    filtered = [
+                        e for e in filtered 
+                        if e.category_id == category_filter or e.category_id in subcategory_ids
+                    ]
+                else:
+                    # It's a subcategory, just match directly
+                    filtered = [e for e in filtered if e.category_id == category_filter]
+            else:
+                # If it's not found (which shouldn't happen), just do a direct match
+                filtered = [e for e in filtered if e.category_id == category_filter]
         
         # Apply type filter
         if type_filter == "expense":
@@ -414,10 +456,12 @@ class ExpensesFrame(BaseFrame):
         ttk.Label(type_frame, text="Transaction Type:").pack(side="left")
         
         type_var = tk.StringVar(value="expense")
-        expense_radio = ttk.Radiobutton(type_frame, text="Expense", value="expense", variable=type_var)
+        expense_radio = ttk.Radiobutton(type_frame, text="Expense", value="expense", variable=type_var,
+                                      command=lambda: self._update_category_list(category_combo, type_var.get()))
         expense_radio.pack(side="left", padx=10)
         
-        income_radio = ttk.Radiobutton(type_frame, text="Income", value="income", variable=type_var)
+        income_radio = ttk.Radiobutton(type_frame, text="Income", value="income", variable=type_var,
+                                     command=lambda: self._update_category_list(category_combo, type_var.get()))
         income_radio.pack(side="left", padx=10)
         
         # Amount field
@@ -444,28 +488,13 @@ class ExpensesFrame(BaseFrame):
         
         ttk.Label(category_frame, text="Category:").pack(side="left")
         
-        # Create hierarchical category list
-        categories = []
-        main_categories = {}
-        
-        # First, find all main categories
-        for cat_id, cat in self.categories_dict.items():
-            if not cat.parent_id:  # Main category
-                main_categories[cat_id] = cat.name
-                categories.append(cat.name)  # Add main category
-        
-        # Then add subcategories with parent names
-        for cat_id, cat in self.categories_dict.items():
-            if cat.parent_id and cat.parent_id in main_categories:  # Subcategory
-                parent_name = main_categories[cat.parent_id]
-                categories.append(f"{parent_name} > {cat.name}")
-        
-        # Sort categories alphabetically
-        categories.sort()
-        
+        # Create combobox first, will populate later
         category_var = tk.StringVar()
-        category_combo = ttk.Combobox(category_frame, textvariable=category_var, values=categories, width=30)
+        category_combo = ttk.Combobox(category_frame, textvariable=category_var, width=30)
         category_combo.pack(side="left", padx=10)
+        
+        # Populate with appropriate categories based on initial selection
+        self._update_category_list(category_combo, type_var.get())
         
         # Description field
         desc_frame = ttk.Frame(form_frame)
@@ -532,12 +561,12 @@ class ExpensesFrame(BaseFrame):
         cancel_btn.pack(side="right", padx=5)
         
         save_btn = ttk.Button(button_frame, text="Save", style="Primary.TButton",
-                            command=lambda: self._save_new_expense(
-                                type_var.get(), amount_var.get(), date_entry.get_date(),
-                                category_var.get(), desc_var.get(), payment_var.get(),
-                                recurring_var.get(), period_var.get(), end_date_entry.get_date(),
-                                tags_var.get(), error_var, dialog
-                            ))
+                           command=lambda: self._save_new_expense(
+                               type_var.get(), amount_var.get(), date_entry.get_date(),
+                               category_combo.get(), desc_var.get(), payment_var.get(),
+                               recurring_var.get(), period_var.get(), end_date_entry.get_date(),
+                               tags_var.get(), error_var, dialog
+                           ))
         save_btn.pack(side="right", padx=5)
         
         # Show/hide recurring details based on checkbox
@@ -551,6 +580,47 @@ class ExpensesFrame(BaseFrame):
         
         # Set focus to amount field
         amount_entry.focus_set()
+    
+    def _update_category_list(self, combo_widget, transaction_type):
+        """Update the category dropdown list based on transaction type (income/expense)."""
+        # Create hierarchical category list
+        categories = []
+        category_to_id = {}  # Map to store the displayed name to category ID
+        main_categories = {}
+        
+        # First, find all appropriate categories based on transaction type
+        is_income = (transaction_type == "income")
+        
+        # Find main categories matching the transaction type
+        for cat_id, cat in self.categories_dict.items():
+            # Check if category matches the transaction type (income or expense)
+            if not cat.parent_id and cat.is_income == is_income:
+                main_categories[cat_id] = cat.name
+                display_name = cat.name
+                categories.append(display_name)
+                category_to_id[display_name] = cat_id
+        
+        # Then add subcategories with parent names
+        for cat_id, cat in self.categories_dict.items():
+            # Make sure subcategory matches transaction type and its parent is in our main categories list
+            if cat.parent_id and cat.parent_id in main_categories and cat.is_income == is_income:
+                parent_name = main_categories[cat.parent_id]
+                display_name = f"{parent_name} > {cat.name}"
+                categories.append(display_name)
+                category_to_id[display_name] = cat_id
+        
+        # Sort categories alphabetically
+        categories.sort()
+        
+        # Store mapping in an attribute for later use
+        self.category_to_id = category_to_id
+        
+        # Update the combobox values
+        combo_widget['values'] = categories
+        if categories:
+            combo_widget.current(0)
+        else:
+            combo_widget.set('')  # Clear the selection if no categories available
     
     def _save_new_expense(self, type_str, amount_str, date_obj, category_str, description, 
                          payment_method, recurring, period, end_date, tags_str, error_var, dialog):
@@ -574,28 +644,14 @@ class ExpensesFrame(BaseFrame):
         # Get date in ISO format
         date_str = date_obj.strftime("%Y-%m-%d")
         
-        # Process category
-        category_id = None
-        if ">" in category_str:  # Subcategory format: "Parent > Child"
-            parent_name, child_name = category_str.split(" > ", 1)
-            
-            # Find the category ID
-            for cat_id, cat in self.categories_dict.items():
-                if cat.name == child_name and cat.parent_id:
-                    parent_cat = self.categories_dict.get(cat.parent_id)
-                    if parent_cat and parent_cat.name == parent_name:
-                        category_id = cat_id
-                        break
-        else:
-            # Main category
-            for cat_id, cat in self.categories_dict.items():
-                if cat.name == category_str and not cat.parent_id:
-                    category_id = cat_id
-                    break
-        
-        if not category_id:
-            error_var.set("Please select a valid category")
+        # Get category ID from the displayed name
+        category_name = category_str
+        if not category_name and type_str == "expense":
+            error_var.set("Please select a category for the expense")
             return
+        
+        # Get the category ID from our mapping
+        category_id = self.category_to_id.get(category_name) if category_name else None
         
         # Process tags
         tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
@@ -681,6 +737,7 @@ class ExpensesFrame(BaseFrame):
         
         # Create hierarchical category list
         categories = []
+        category_to_id = {}  # Map to store the displayed name to category ID
         main_categories = {}
         category_to_select = None
         
@@ -688,22 +745,25 @@ class ExpensesFrame(BaseFrame):
         for cat_id, cat in self.categories_dict.items():
             if not cat.parent_id:  # Main category
                 main_categories[cat_id] = cat.name
-                categories.append(cat.name)  # Add main category
+                display_name = cat.name
+                categories.append(display_name)
+                category_to_id[display_name] = cat_id
                 
                 # If this is the selected category, make note of it
                 if cat_id == expense.category_id:
-                    category_to_select = cat.name
+                    category_to_select = display_name
         
         # Then add subcategories with parent names
         for cat_id, cat in self.categories_dict.items():
             if cat.parent_id and cat.parent_id in main_categories:  # Subcategory
                 parent_name = main_categories[cat.parent_id]
-                category_name = f"{parent_name} > {cat.name}"
-                categories.append(category_name)
+                display_name = f"{parent_name} > {cat.name}"
+                categories.append(display_name)
+                category_to_id[display_name] = cat_id
                 
                 # If this is the selected category, make note of it
                 if cat_id == expense.category_id:
-                    category_to_select = category_name
+                    category_to_select = display_name
         
         # Sort categories alphabetically
         categories.sort()
@@ -787,7 +847,7 @@ class ExpensesFrame(BaseFrame):
         save_btn = ttk.Button(button_frame, text="Save Changes", style="Primary.TButton",
                             command=lambda: self._update_expense(
                                 expense, type_var.get(), amount_var.get(), date_entry.get_date(),
-                                category_var.get(), desc_var.get(), payment_var.get(),
+                                category_combo.get(), desc_var.get(), payment_var.get(),
                                 recurring_var.get(), period_var.get(), end_date_entry.get_date(),
                                 tags_var.get(), error_var, dialog
                             ))
@@ -818,28 +878,14 @@ class ExpensesFrame(BaseFrame):
         # Get date in ISO format
         date_str = date_obj.strftime("%Y-%m-%d")
         
-        # Process category
-        category_id = None
-        if ">" in category_str:  # Subcategory format: "Parent > Child"
-            parent_name, child_name = category_str.split(" > ", 1)
-            
-            # Find the category ID
-            for cat_id, cat in self.categories_dict.items():
-                if cat.name == child_name and cat.parent_id:
-                    parent_cat = self.categories_dict.get(cat.parent_id)
-                    if parent_cat and parent_cat.name == parent_name:
-                        category_id = cat_id
-                        break
-        else:
-            # Main category
-            for cat_id, cat in self.categories_dict.items():
-                if cat.name == category_str and not cat.parent_id:
-                    category_id = cat_id
-                    break
-        
-        if not category_id:
-            error_var.set("Please select a valid category")
+        # Get category ID from the displayed name
+        category_name = category_str
+        if not category_name:
+            error_var.set("Please select a category")
             return
+        
+        # Get the category ID from our mapping
+        category_id = self.category_to_id.get(category_name) if category_name else None
         
         # Process tags
         tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
@@ -875,7 +921,6 @@ class ExpensesFrame(BaseFrame):
             expense_file = os.path.join(self.controller.data_dir, "expenses", user_id, f"{expense.expense_id}.json")
             
             try:
-                import os
                 if os.path.exists(expense_file):
                     os.remove(expense_file)
                 
@@ -891,6 +936,12 @@ class ExpensesFrame(BaseFrame):
             self.expenses = Expense.get_user_expenses(user_id, self.controller.data_dir)
             categories = Category.get_all_categories(user_id, self.controller.data_dir)
             self.categories_dict = {cat.category_id: cat for cat in categories}
+            
+            # Ensure "Income" category has is_income=True
+            for cat_id, cat in self.categories_dict.items():
+                if cat.name == "Income" or cat.name in ["Salary", "Bonus", "Interest", "Dividends", "Freelance", "Rental"]:
+                    cat.is_income = True
+                    cat.save(self.controller.data_dir)
             
             # Populate category filters
             self._populate_category_filters()
@@ -915,3 +966,88 @@ class ExpensesFrame(BaseFrame):
         
         # Refresh expenses data
         self.refresh_data()
+
+    def _export_to_csv(self):
+        """Export expenses to a CSV file."""
+        try:
+            if not self.controller.current_user:
+                self.show_message("Error", "Please log in to export expenses", "error")
+                return
+                
+            if not self.filtered_expenses:
+                self.show_message("No Data", "There are no expenses to export", "info")
+                return
+                
+            # Ask user to select a destination file
+            file_path = filedialog.asksaveasfilename(
+                title="Export Expenses",
+                defaultextension=".csv",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+            )
+            
+            if not file_path:
+                return  # User cancelled
+            
+            # Use the centralized export function
+            success, result, filename = export_expenses_to_csv(file_path, self.filtered_expenses, self.categories_dict)
+            
+            if success:
+                self.show_message(
+                    "Export Complete", 
+                    f"Successfully exported {result} transactions to {filename}", 
+                    "info"
+                )
+            else:
+                self.show_message("Error", f"Failed to export file: {result}", "error")
+                
+        except Exception as e:
+            self.show_message("Error", f"Failed to export file: {str(e)}", "error")
+
+    def show_message(self, title, message, message_type="info"):
+        """Show a message dialog to the user."""
+        icon = {
+            "info": "ℹ️",
+            "warning": "⚠️",
+            "error": "❌",
+            "success": "✅"
+        }.get(message_type, "ℹ️")
+        
+        dialog = tk.Toplevel(self)
+        dialog.title(title)
+        dialog.geometry("350x150")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Center dialog on parent
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + (self.winfo_width() - dialog.winfo_width()) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - dialog.winfo_height()) // 2
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Dialog content
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Icon and message
+        message_frame = ttk.Frame(frame)
+        message_frame.pack(fill="both", expand=True)
+        
+        icon_label = ttk.Label(message_frame, text=icon, font=("Helvetica", 24))
+        icon_label.pack(side="left", padx=(0, 10))
+        
+        msg_label = ttk.Label(message_frame, text=message, wraplength=250)
+        msg_label.pack(side="left", fill="both", expand=True)
+        
+        # OK button
+        button_frame = ttk.Frame(frame)
+        button_frame.pack(fill="x", pady=(10, 0))
+        
+        ok_button = ttk.Button(button_frame, text="OK", command=dialog.destroy)
+        ok_button.pack(side="right")
+        
+        # Set focus to OK button
+        ok_button.focus_set()
+        
+        # Bind Enter key to close dialog
+        dialog.bind("<Return>", lambda event: dialog.destroy())

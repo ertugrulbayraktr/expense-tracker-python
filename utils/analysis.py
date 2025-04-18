@@ -754,3 +754,54 @@ def get_spending_suggestions(expenses, categories_dict=None, budget_dict=None):
         })
     
     return suggestions
+
+
+def export_expenses_to_csv(file_path, expenses, categories_dict=None):
+    """
+    Export expenses to a CSV file.
+    
+    Args:
+        file_path (str): Path to save the CSV file.
+        expenses (list): List of Expense objects to export.
+        categories_dict (dict, optional): Dictionary mapping category IDs to Category objects.
+        
+    Returns:
+        bool: True if export was successful, False otherwise.
+    """
+    import csv
+    import os
+    
+    try:
+        with open(file_path, "w", newline="", encoding="utf-8") as csv_file:
+            csv_writer = csv.writer(csv_file)
+            
+            # Write header
+            csv_writer.writerow([
+                "date", "description", "category", "amount", "is_income", 
+                "payment_method", "tags"
+            ])
+            
+            # Write data
+            for expense in expenses:
+                # Get category name if available
+                category_name = ""
+                if categories_dict and expense.category_id in categories_dict:
+                    category_name = categories_dict[expense.category_id].name
+                
+                # Format tags as comma-separated
+                tags = ",".join(expense.tags) if expense.tags else ""
+                
+                csv_writer.writerow([
+                    expense.date,
+                    expense.description,
+                    category_name,
+                    f"{expense.amount:.2f}",
+                    "Yes" if expense.is_income else "No",
+                    expense.payment_method or "",
+                    tags
+                ])
+        
+        return True, len(expenses), os.path.basename(file_path)
+            
+    except Exception as e:
+        return False, str(e), None

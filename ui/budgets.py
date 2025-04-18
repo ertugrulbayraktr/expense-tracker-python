@@ -334,13 +334,125 @@ class BudgetsFrame(BaseFrame):
     
     def _show_set_budget_dialog(self):
         """Show dialog for setting a category budget."""
-        # Simplified placeholder implementation
-        self.show_message("Coming Soon", "Budget management will be available in a future update", "info")
+        # Create a dialog window
+        dialog = tk.Toplevel(self)
+        dialog.title("Set Budget")
+        dialog.geometry("400x350")
+        dialog.resizable(False, False)
+        dialog.transient(self)  # Make dialog modal
+        dialog.grab_set()
+        
+        # Create form
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Category selection
+        ttk.Label(frame, text="Category:").grid(row=0, column=0, sticky="w", pady=5)
+        category_var = tk.StringVar()
+        category_combo = ttk.Combobox(frame, textvariable=category_var, width=30, state="readonly")
+        category_combo.grid(row=0, column=1, sticky="ew", pady=5)
+        
+        # Fill category options
+        sorted_categories = sorted(self.categories, key=lambda c: c.name)
+        category_combo['values'] = [cat.name for cat in sorted_categories]
+        if category_combo['values']:
+            category_combo.current(0)
+        
+        # Budget amount
+        ttk.Label(frame, text="Budget Amount:").grid(row=1, column=0, sticky="w", pady=5)
+        amount_var = tk.StringVar(value="0.0")
+        amount_entry = ttk.Entry(frame, textvariable=amount_var, width=30)
+        amount_entry.grid(row=1, column=1, sticky="ew", pady=5)
+        amount_entry.focus_set()
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        
+        save_btn = ttk.Button(btn_frame, text="Save", 
+                            command=lambda: self._save_budget(dialog, 
+                                                          sorted_categories[category_combo.current()], 
+                                                          amount_var.get()))
+        save_btn.pack(side="left", padx=5)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Cancel", command=dialog.destroy)
+        cancel_btn.pack(side="left", padx=5)
     
     def _show_edit_budget_dialog(self, category):
         """Show dialog for editing a category budget."""
-        # Simplified placeholder implementation
-        self.show_message("Coming Soon", "Budget management will be available in a future update", "info")
+        # Create a dialog window
+        dialog = tk.Toplevel(self)
+        dialog.title(f"Edit Budget: {category.name}")
+        dialog.geometry("400x250")
+        dialog.resizable(False, False)
+        dialog.transient(self)  # Make dialog modal
+        dialog.grab_set()
+        
+        # Create form
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Category info
+        ttk.Label(frame, text="Category:", font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(frame, text=category.name).grid(row=0, column=1, sticky="w", pady=5)
+        
+        # Budget amount
+        ttk.Label(frame, text="Budget Amount:").grid(row=1, column=0, sticky="w", pady=5)
+        amount_var = tk.StringVar(value=str(category.budget))
+        amount_entry = ttk.Entry(frame, textvariable=amount_var, width=30)
+        amount_entry.grid(row=1, column=1, sticky="ew", pady=5)
+        amount_entry.focus_set()
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        
+        save_btn = ttk.Button(btn_frame, text="Save", 
+                            command=lambda: self._update_budget(dialog, category, amount_var.get()))
+        save_btn.pack(side="left", padx=5)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Cancel", command=dialog.destroy)
+        cancel_btn.pack(side="left", padx=5)
+    
+    def _save_budget(self, dialog, category, amount):
+        """Save a category budget."""
+        try:
+            budget_value = float(amount)
+            if budget_value < 0:
+                raise ValueError("Budget must be positive")
+        except ValueError as e:
+            self.show_message("Error", f"Invalid budget amount: {str(e)}", "error")
+            return
+        
+        # Update category budget
+        category.budget = budget_value
+        
+        if category.save(self.controller.data_dir):
+            dialog.destroy()
+            self.refresh_data()
+            self.show_message("Success", "Budget updated successfully", "info")
+        else:
+            self.show_message("Error", "Failed to save budget", "error")
+    
+    def _update_budget(self, dialog, category, amount):
+        """Update a category budget."""
+        try:
+            budget_value = float(amount)
+            if budget_value < 0:
+                raise ValueError("Budget must be positive")
+        except ValueError as e:
+            self.show_message("Error", f"Invalid budget amount: {str(e)}", "error")
+            return
+        
+        # Update category budget
+        category.budget = budget_value
+        
+        if category.save(self.controller.data_dir):
+            dialog.destroy()
+            self.refresh_data()
+            self.show_message("Success", "Budget updated successfully", "info")
+        else:
+            self.show_message("Error", "Failed to save budget", "error")
     
     def refresh_data(self):
         """Refresh the category and expense data and view."""

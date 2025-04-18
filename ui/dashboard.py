@@ -11,7 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from .base import BaseFrame, ScrollableFrame, Tooltip
 from models.expense import Expense
 from models.category import Category
-from utils.analysis import get_monthly_summary, compare_time_periods, detect_spending_anomalies
+from utils.analysis import get_monthly_summary, compare_time_periods, detect_spending_anomalies, export_expenses_to_csv
 from utils.visualization import create_expense_pie_chart, create_monthly_trend_chart, figure_to_image
 
 
@@ -117,9 +117,9 @@ class DashboardFrame(BaseFrame):
                               command=lambda: self.controller.show_frame("BudgetsFrame"))
         budget_btn.pack(pady=5, fill="x")
         
-        import_export_btn = ttk.Button(sidebar, text="Import/Export", width=20,
-                                     command=lambda: self.controller.show_frame("ImportExportFrame"))
-        import_export_btn.pack(pady=5, fill="x")
+        export_btn = ttk.Button(sidebar, text="Export Data", width=20,
+                                    command=self._export_data)
+        export_btn.pack(pady=5, fill="x")
         
         # Add spacer
         ttk.Separator(sidebar, orient="horizontal").pack(pady=10, fill="x")
@@ -407,6 +407,46 @@ class DashboardFrame(BaseFrame):
             self.categories_dict = {cat.category_id: cat for cat in categories}
         
         self._show_overview_panel()
+    
+    def _export_data(self):
+        """Export expense data to CSV file."""
+        # Ensure user is logged in
+        if not self.controller.current_user:
+            self.show_message("Error", "Please log in to export expense data.", "error")
+            return
+        
+        # Get user's expenses
+        user_id = self.controller.current_user.user_id
+        expenses = Expense.get_user_expenses(user_id, self.controller.data_dir)
+        categories = Category.get_all_categories(user_id, self.controller.data_dir)
+        categories_dict = {cat.category_id: cat for cat in categories}
+        
+        if not expenses:
+            self.show_message("No Data", "There are no expenses to export.", "info")
+            return
+        
+        # Ask user for file location
+        from tkinter import filedialog
+        file_path = filedialog.asksaveasfilename(
+            title="Export Expenses",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+        )
+        
+        if not file_path:
+            return  # User cancelled
+            
+        # Use the centralized export function
+        success, result, filename = export_expenses_to_csv(file_path, expenses, categories_dict)
+        
+        if success:
+            self.show_message(
+                "Export Complete", 
+                f"Successfully exported {result} transactions to {filename}", 
+                "info"
+            )
+        else:
+            self.show_message("Error", f"Failed to export file: {result}", "error")
     
     def on_show_frame(self):
         """Called when the frame is shown."""
